@@ -10,9 +10,35 @@ export interface ExportBlock {
   category?: string
   annotation?: string
   confidence?: number | null
+  influencedBy?: string[]
   sources?: { url: string; title: string; siteName: string }[]
   isPinned?: boolean
   timestamp?: number
+}
+
+export interface BlockscapeExportProject {
+  id: string
+  name: string
+  blocks: ExportBlock[]
+}
+
+export interface BlockscapeExportItem {
+  id: string
+  name: string
+  deps?: string[]
+}
+
+export interface BlockscapeExportCategory {
+  id: "entity" | "idea" | "question" | "comparison" | "opinion" | "reference"
+  title: string
+  items: BlockscapeExportItem[]
+}
+
+export interface BlockscapeExport {
+  id: string
+  title: string
+  categories: BlockscapeExportCategory[]
+  abstract: string
 }
 
 // ── Type ordering — research-logical flow ─────────────────────────────────────
@@ -51,6 +77,30 @@ const TYPE_META: Record<ContentType, { heading: string; emoji: string; descripti
   general:    { heading: "Notes",       emoji: "📝", description: "Miscellaneous notes" },
 }
 
+const BLOCKSCAPE_CATEGORY_MAP = {
+  entity:     { id: "entity",     title: "Entities" },
+  idea:       { id: "idea",       title: "Ideas" },
+  question:   { id: "question",   title: "Questions" },
+  comparison: { id: "comparison", title: "Comparisons" },
+  opinion:    { id: "opinion",    title: "Opinions" },
+  reference:  { id: "reference",  title: "References" },
+} as const
+
+const BLOCKSCAPE_CATEGORY_ORDER = [
+  "entity",
+  "idea",
+  "question",
+  "comparison",
+  "opinion",
+  "reference",
+] as const
+
+function isBlockscapeType(
+  type: ContentType,
+): type is keyof typeof BLOCKSCAPE_CATEGORY_MAP {
+  return type in BLOCKSCAPE_CATEGORY_MAP
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatDate(ts?: number): string {
@@ -79,6 +129,10 @@ function slug(text: string): string {
     .trim()
     .replace(/\s+/g, "-")
     .slice(0, 50)
+}
+
+function truncate(text: string, length = 80): string {
+  return text.slice(0, length)
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -265,11 +319,75 @@ export function exportToMarkdown(projectName: string, blocks: ExportBlock[]): st
   return lines.join("\n")
 }
 
+export function exportToBlockscape(project: BlockscapeExportProject): BlockscapeExport {
+  const categories = {
+    entity: [] as BlockscapeExportItem[],
+    idea: [] as BlockscapeExportItem[],
+    question: [] as BlockscapeExportItem[],
+    comparison: [] as BlockscapeExportItem[],
+    opinion: [] as BlockscapeExportItem[],
+    reference: [] as BlockscapeExportItem[],
+  }
+
+  const visibleTypes = new Set<ContentType>(BLOCKSCAPE_CATEGORY_ORDER)
+  const visibleIds = new Set(
+    project.blocks
+      .filter(block => visibleTypes.has(block.contentType))
+      .map(block => block.id),
+  )
+
+  for (const block of project.blocks) {
+    if (!isBlockscapeType(block.contentType)) continue
+
+    const item: BlockscapeExportItem = {
+      id: block.id,
+      name: truncate(block.text || ""),
+    }
+
+    const deps = (block.influencedBy || []).filter(depId => visibleIds.has(depId))
+    if (deps.length > 0) item.deps = deps
+
+    categories[block.contentType].push(item)
+  }
+
+  const resultCategories: BlockscapeExportCategory[] = []
+  for (const key of BLOCKSCAPE_CATEGORY_ORDER) {
+    const items = categories[key]
+    if (items.length === 0) continue
+    const meta = BLOCKSCAPE_CATEGORY_MAP[key]
+    resultCategories.push({
+      id: meta.id,
+      title: meta.title,
+      items,
+    })
+  }
+
+  return {
+    id: project.id,
+    title: project.name,
+    categories: resultCategories,
+    abstract: "",
+  }
+}
+
 // ── Download / clipboard helpers ─────────────────────────────────────────────
 
 /** Trigger a browser download of a .md file. */
 export function downloadMarkdown(filename: string, content: string): void {
   const blob = new Blob([content], { type: "text/markdown;charset=utf-8" })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement("a")
+  a.href     = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+/** Trigger a browser download of a .json file. */
+export function downloadJson(filename: string, data: unknown): void {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json;charset=utf-8",
+  })
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement("a")
   a.href     = url
