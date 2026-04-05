@@ -244,6 +244,13 @@ export function AboutPanel({ open, onClose }: AboutPanelProps) {
                   <p className="text-sm text-muted-foreground">An interactive force-directed graph of all your nodes. Connections between them become the focus — highly-connected nodes drift toward the centre, isolated ones settle at the periphery. Click any node to open its full detail panel. Hover to dim unrelated nodes.</p>
                 </div>
               </div>
+              <div className="flex gap-3 p-3 rounded-sm bg-secondary/30 border border-border/50">
+                <GitFork className="h-4 w-4 flex-shrink-0 text-primary mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground mb-0.5">Blockscape</p>
+                  <p className="text-sm text-muted-foreground">A structured dependency map. Nodes are sorted into fixed lanes by type: Entities, Ideas, Questions, Comparisons, Opinions, and References. Dependencies pull related cards into vertical clusters, making branches and chains easier to scan.</p>
+                </div>
+              </div>
             </div>
           </Section>
 

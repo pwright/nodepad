@@ -45,6 +45,7 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
     { id: "tiling", icon: Grid,    label: "Tiling", sub: "" },
     { id: "kanban", icon: Trello,  label: "Kanban", sub: "" },
     { id: "graph",  icon: GitFork, label: "Graph",  sub: "" },
+    { id: "graph2", icon: GitFork, label: "Blockscape", sub: "" },
   ], [])
 
   const NAV_ITEMS = React.useMemo(() => [
@@ -71,7 +72,7 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
   // Section 1: nav     [viewCount .. viewCount+navCount)
   // Section 2: actions [viewCount+navCount .. total)
   const sections = React.useMemo(() => [
-    { start: 0,                    count: viewCount,   cols: 3 },
+    { start: 0,                    count: viewCount,   cols: 4 },
     { start: viewCount,            count: navCount,    cols: 4 },
     { start: viewCount + navCount, count: actionCount, cols: 5 },
   ], [viewCount, navCount, actionCount])
@@ -235,7 +236,7 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
                 {viewItems.length > 0 && (
                   <div>
                     <p className="px-1 pb-2 font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-white/45">Views</p>
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div className="grid grid-cols-4 gap-1.5">
                       {viewItems.map((item, i) => {
                         const focused = focusedIdx === i
                         return (
