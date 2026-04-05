@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { TilingArea } from "@/components/tiling-area"
 import { KanbanArea } from "@/components/kanban-area"
 import { GraphArea } from "@/components/graph-area"
+import { Graph2Area } from "@/components/graph2-area"
 import { ProjectSidebar } from "@/components/project-sidebar"
 import { StatusBar } from "@/components/status-bar"
 import { GhostPanel, type GhostNote } from "@/components/ghost-panel"
@@ -46,7 +47,7 @@ export default function Page() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isIndexOpen, setIsIndexOpen] = useState(false)
   const [isGhostPanelOpen, setIsGhostPanelOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<"tiling" | "kanban" | "graph">("tiling")
+  const [viewMode, setViewMode] = useState<"tiling" | "kanban" | "graph" | "graph2">("tiling")
   const [isCommandKOpen, setIsCommandKOpen] = useState(false)
   const [jumpToSettings, setJumpToSettings] = useState(false)
   const [isIntroOpen, setIsIntroOpen] = useState(false)
@@ -773,6 +774,8 @@ export default function Page() {
       setViewMode("tiling")
     } else if (cmd === "graph") {
       setViewMode("graph")
+    } else if (cmd === "graph2") {
+      setViewMode("graph2")
     } else if (cmd === "open-projects") {
       setIsGhostPanelOpen(false)
       setIsIndexOpen(false)
@@ -937,9 +940,23 @@ export default function Page() {
                   onDeleteSubTask={handleDeleteSubTask}
                   collapsedIds={new Set(activeProject.collapsedIds)}
                 />
-              ) : (
+              ) : viewMode === "graph" ? (
                 <GraphArea
                   key={`graph-${activeProjectId}`}
+                  blocks={activeProject.blocks}
+                  ghostNote={ghostNotes[ghostNotes.length - 1]}
+                  projectName={activeProject.name}
+                  onReEnrich={reEnrichBlock}
+                  onChangeType={handleChangeType}
+                  onTogglePin={handleTogglePin}
+                  onEdit={editBlock}
+                  onEditAnnotation={editAnnotation}
+                  highlightedBlockId={highlightedBlockId}
+                  onHighlight={setHighlightedBlockId}
+                />
+              ) : (
+                <Graph2Area
+                  key={`graph2-${activeProjectId}`}
                   blocks={activeProject.blocks}
                   ghostNote={ghostNotes[ghostNotes.length - 1]}
                   projectName={activeProject.name}
