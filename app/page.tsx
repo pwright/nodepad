@@ -17,7 +17,7 @@ import { INITIAL_PROJECTS } from "@/lib/initial-data"
 import { useAISettings } from "@/lib/ai-settings"
 import { enrichBlockClient } from "@/lib/ai-enrich"
 import { generateGhostClient } from "@/lib/ai-ghost"
-import { exportToMarkdown, downloadMarkdown, copyToClipboard } from "@/lib/export"
+import { exportToMarkdown, exportToBlockscape, downloadMarkdown, downloadJson, copyToClipboard } from "@/lib/export"
 import { downloadNodepadFile, parseNodepadFile, NodepadParseError } from "@/lib/nodepad-format"
 import { detectContentType } from "@/lib/detect-content-type"
 
@@ -815,6 +815,16 @@ export default function Page() {
           const md = exportToMarkdown(proj.name, proj.blocks)
           const slug = proj.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
           downloadMarkdown(`${slug}.md`, md)
+        }
+        return prev
+      })
+    } else if (cmd === "export-blockscape") {
+      setProjects(prev => {
+        const proj = prev.find(p => p.id === activeProjectId)
+        if (proj) {
+          const data = exportToBlockscape(proj)
+          const slug = proj.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
+          downloadJson(`${slug || "project"}-blockscape.json`, data)
         }
         return prev
       })

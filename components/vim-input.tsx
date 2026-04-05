@@ -13,6 +13,7 @@ import { useModKey } from "@/lib/utils"
 const ACTION_ITEMS = [
   { id: "export-nodepad", icon: FolderDown,  label: "Export",  sub: ".nodepad"  },
   { id: "import-nodepad", icon: FolderInput, label: "Import",  sub: ".nodepad"  },
+  { id: "export-blockscape", icon: Download, label: "Export",  sub: "blockscape" },
   { id: "export-md",      icon: Download,    label: "Export",  sub: "markdown"  },
   { id: "copy-md",        icon: Clipboard,   label: "Copy",    sub: "markdown"  },
   { id: "clear",          icon: Trash2,      label: "Clear",   sub: "canvas"    },
@@ -74,7 +75,7 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
   const sections = React.useMemo(() => [
     { start: 0,                    count: viewCount,   cols: 4 },
     { start: viewCount,            count: navCount,    cols: 4 },
-    { start: viewCount + navCount, count: actionCount, cols: 5 },
+    { start: viewCount + navCount, count: actionCount, cols: 6 },
   ], [viewCount, navCount, actionCount])
 
   const getSectionForIdx = React.useCallback((idx: number) => {
@@ -291,7 +292,7 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
                 {actionItems.length > 0 && (
                   <div className="border-t border-white/10 pt-3">
                     <p className="px-1 pb-2 font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-white/45">Actions</p>
-                    <div className="grid grid-cols-5 gap-1.5">
+                    <div className="grid grid-cols-6 gap-1.5">
                       {actionItems.map((item, i) => {
                         const idx     = viewCount + navCount + i
                         const focused = focusedIdx === idx

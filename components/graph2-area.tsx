@@ -629,10 +629,37 @@ export function Graph2Area({
                   const isSelected = node.id === selectedId
                   const isHovered = node.id === hoveredId
                   const isHighlighted = node.id === highlightedBlockId
+                  const isActive = isSelected || isHovered || isHighlighted
                   const isDimmed = focalId != null &&
                     !isSelected &&
                     node.id !== focalId &&
                     (!connectedToFocal || !connectedToFocal.has(node.id))
+                  const cardFilter = isActive
+                    ? "none"
+                    : isDimmed
+                      ? "saturate(0.42) brightness(0.52)"
+                      : focalId != null
+                        ? "saturate(0.6) brightness(0.72)"
+                        : "saturate(0.64) brightness(0.78)"
+                  const badgeOpacity = isActive
+                    ? 1
+                    : isDimmed
+                      ? 0.34
+                      : focalId != null
+                        ? 0.56
+                        : 0.62
+                  const textColor = isActive
+                    ? "rgba(241, 245, 249, 1)"
+                    : isDimmed
+                      ? "rgba(148, 163, 184, 0.34)"
+                      : focalId != null
+                        ? "rgba(203, 213, 225, 0.58)"
+                        : "rgba(203, 213, 225, 0.68)"
+                  const cardBorderColor = isActive
+                    ? "rgba(121, 142, 176, 0.34)"
+                    : isDimmed
+                      ? "rgba(121, 142, 176, 0.18)"
+                      : "rgba(121, 142, 176, 0.24)"
 
                   const config = CONTENT_TYPE_CONFIG[node.block.contentType]
                   const accent = config.accentVar
@@ -649,14 +676,14 @@ export function Graph2Area({
                         top: node.y - CARD_HEIGHT / 2,
                         width: CARD_WIDTH,
                         height: CARD_HEIGHT,
-                        opacity: isDimmed ? 0.16 : 1,
-                        borderColor: "rgba(121, 142, 176, 0.34)",
-                        background: "linear-gradient(180deg, rgba(24, 33, 52, 0.97), rgba(15, 21, 34, 0.95))",
+                        borderColor: cardBorderColor,
+                        background: "linear-gradient(180deg, #182134, #0f1522)",
                         boxShadow: isSelected
                           ? `0 0 0 3px color-mix(in oklch, ${accent} 28%, transparent), 0 18px 40px rgba(2, 6, 23, 0.5), 0 0 28px color-mix(in oklch, ${accent} 16%, transparent)`
                           : isHovered || isHighlighted
                             ? `0 0 0 2px color-mix(in oklch, ${accent} 20%, transparent), 0 14px 30px rgba(2, 6, 23, 0.42)`
                             : "0 10px 24px rgba(2, 6, 23, 0.32)",
+                        filter: cardFilter,
                         transform: isSelected || isHovered ? "translateY(-2px)" : "translateY(0)",
                       }}
                       onMouseDown={e => e.stopPropagation()}
@@ -706,6 +733,7 @@ export function Graph2Area({
                           background: badgeColor,
                           color: "rgba(15, 23, 42, 0.72)",
                           boxShadow: `0 8px 22px color-mix(in srgb, ${badgeColor} 28%, transparent)`,
+                          opacity: badgeOpacity,
                         }}
                       >
                         {badgeLetter}
@@ -720,11 +748,12 @@ export function Graph2Area({
 
                       <div className="flex h-full items-center justify-center px-4 pt-8 pb-4 text-center">
                         <p
-                          className="overflow-hidden text-[13px] font-medium leading-[1.08] tracking-[-0.02em] text-slate-100"
+                          className="overflow-hidden text-[13px] font-medium leading-[1.08] tracking-[-0.02em]"
                           style={{
                             display: "-webkit-box",
                             WebkitLineClamp: 6,
                             WebkitBoxOrient: "vertical",
+                            color: textColor,
                           }}
                         >
                           {node.label}
