@@ -2,7 +2,7 @@
 
 import { FolderInput } from "lucide-react"
 import type { NodepadPluginModule } from "@/lib/plugins"
-import { importMarkdownFiles } from "./import"
+import { importMarkdownFiles, importMarkdownFilesWithAI } from "./import"
 
 function openMarkdownPicker(onFiles: (files: File[]) => void) {
   const input = document.createElement("input")
@@ -62,6 +62,56 @@ export const plugin: NodepadPluginModule = {
           } catch (error) {
             console.error("Markdown import failed", error)
             alert("Could not import Markdown files.")
+          }
+        })
+      },
+    },
+    {
+      id: "import-markdown-ai",
+      label: "Import",
+      sub: "markdown + AI",
+      icon: FolderInput,
+      about: {
+        title: "Import Markdown Files With AI Metadata",
+        description:
+          "Append multiple Markdown files into the current project, preserve their Markdown bodies, and use AI to update type, category, confidence, sources, and connections.",
+      },
+      run({ activeProject, appendBlocks }) {
+        if (!activeProject) return
+
+        openMarkdownPicker(async files => {
+          try {
+            const { blocks, warnings } = await importMarkdownFilesWithAI(
+              files,
+              activeProject.blocks.map(block => ({
+                id: block.id,
+                text: block.text,
+                category: block.category,
+                annotation: block.annotation,
+              })),
+              activeProject.blocks.map(block => block.id),
+            )
+
+            if (blocks.length === 0) {
+              alert("No importable Markdown files were selected.")
+              return
+            }
+
+            appendBlocks(blocks)
+
+            alert([
+              `Imported ${blocks.length} Markdown file${blocks.length === 1 ? "" : "s"}. AI metadata was applied where available.`,
+              ...(warnings.length > 0
+                ? [
+                    "",
+                    warnings.slice(0, 8).join("\n"),
+                    warnings.length > 8 ? `\n...and ${warnings.length - 8} more warning${warnings.length - 8 === 1 ? "" : "s"}.` : "",
+                  ]
+                : []),
+            ].join("\n"))
+          } catch (error) {
+            console.error("Markdown import with AI failed", error)
+            alert("Could not import Markdown files with AI metadata.")
           }
         })
       },

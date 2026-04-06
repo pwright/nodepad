@@ -1,3 +1,5 @@
+import { enrichBlockClient } from "@/lib/ai-enrich"
+import { loadAIConfig } from "@/lib/ai-settings"
 import { ALL_CONTENT_TYPES, type ContentType } from "@/lib/content-types"
 import { detectContentType } from "@/lib/detect-content-type"
 import type {
@@ -23,11 +25,29 @@ interface FrontmatterParseResult {
   body: string
 }
 
-interface ImportedCandidate {
-  block: NodepadPluginBlockInput
+export interface MarkdownImportContextBlock {
+  id: string
+  text: string
+  category?: string
+  annotation?: string
+}
+
+interface PreparedImportBlock extends NodepadPluginBlockInput {
+  id: string
+  text: string
+  timestamp: number
+  contentType: ContentType
+}
+
+export interface MarkdownImportCandidate {
+  block: PreparedImportBlock
   aliases: string[]
   influenceRefs: string[]
   fileName: string
+  originalAnnotation?: string
+  enrichmentText: string
+  explicitType?: ContentType
+  categoryHint?: string
 }
 
 export interface MarkdownImportResult {
@@ -39,6 +59,10 @@ const CONTENT_TYPES = new Set<ContentType>(ALL_CONTENT_TYPES)
 
 function normalizeLineEndings(input: string): string {
   return input.replace(/\r\n?/g, "\n")
+}
+
+function normalizeMultilineText(input: string): string {
+  return input.replace(/\u0000/g, "").trim()
 }
 
 function countIndent(raw: string): number {
@@ -492,6 +516,29 @@ function joinParagraphs(parts: Array<string | undefined>): string | undefined {
   return compact.length > 0 ? compact.join("\n\n") : undefined
 }
 
+function buildEnrichmentText(text: string, annotation?: string): string {
+  if (!annotation?.trim()) return text
+  return `${text}\n\n${normalizeMultilineText(annotation)}`
+}
+
+function mergeSources(
+  ...sourceLists: Array<NodepadPluginSourceInput[] | undefined>
+): NodepadPluginSourceInput[] | undefined {
+  const merged: NodepadPluginSourceInput[] = []
+  const seen = new Set<string>()
+
+  for (const sourceList of sourceLists) {
+    for (const source of sourceList ?? []) {
+      const key = source.url.trim()
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      merged.push(source)
+    }
+  }
+
+  return merged.length > 0 ? merged : undefined
+}
+
 function resolveTitleAndBody(
   data: Record<string, FrontmatterValue>,
   body: string,
@@ -573,13 +620,13 @@ function resolveInfluenceRefs(
   return resolved.size > 0 ? Array.from(resolved) : undefined
 }
 
-export async function importMarkdownFiles(
+export async function prepareMarkdownImports(
   files: File[],
   existingBlockIds: string[],
-): Promise<MarkdownImportResult> {
+): Promise<{ candidates: MarkdownImportCandidate[]; warnings: string[] }> {
   const warnings: string[] = []
   const usedIds = new Set(existingBlockIds)
-  const candidates: ImportedCandidate[] = []
+  const candidates: MarkdownImportCandidate[] = []
   const sortedFiles = [...files].sort((a, b) => a.name.localeCompare(b.name))
 
   for (const file of sortedFiles) {
@@ -590,13 +637,14 @@ export async function importMarkdownFiles(
     const { text, annotation, detectionText } = resolveTitleAndBody(data, body, stem)
     const id = chooseUniqueId(explicitId, stem, usedIds)
     const timestamp = parseTimestamp(data.timestamp ?? data.date ?? data.created, file.lastModified)
-    const contentType = parseContentType(data.contentType ?? data.type) || detectContentType(detectionText)
+    const explicitType = parseContentType(data.contentType ?? data.type)
+    const contentType = explicitType || detectContentType(detectionText)
     const subTasks = parseSubTasks(data.subTasks ?? data.tasks, timestamp)
     const category = parseCategory(data)
     const confidence = parseConfidence(data.confidence)
     const sources = parseSources(data.sources)
 
-    const block: NodepadPluginBlockInput = {
+    const block: PreparedImportBlock = {
       id,
       text,
       timestamp,
@@ -615,6 +663,10 @@ export async function importMarkdownFiles(
       aliases: collectAliases(file, text, id, explicitId),
       influenceRefs: parseStringList(data.influencedBy),
       fileName: file.name,
+      originalAnnotation: annotation,
+      enrichmentText: buildEnrichmentText(text, annotation),
+      explicitType,
+      categoryHint: category,
     })
   }
 
@@ -634,7 +686,7 @@ export async function importMarkdownFiles(
     }
   }
 
-  const blocks = candidates.map(candidate => {
+  const resolvedCandidates = candidates.map(candidate => {
     const influencedBy = resolveInfluenceRefs(
       candidate.influenceRefs,
       aliasToId,
@@ -644,9 +696,104 @@ export async function importMarkdownFiles(
     )
 
     return influencedBy
-      ? { ...candidate.block, influencedBy }
-      : candidate.block
+      ? { ...candidate, block: { ...candidate.block, influencedBy } }
+      : candidate
   })
+
+  return { candidates: resolvedCandidates, warnings }
+}
+
+export async function importMarkdownFiles(
+  files: File[],
+  existingBlockIds: string[],
+): Promise<MarkdownImportResult> {
+  const { candidates, warnings } = await prepareMarkdownImports(files, existingBlockIds)
+  return {
+    blocks: candidates.map(candidate => candidate.block),
+    warnings,
+  }
+}
+
+export async function importMarkdownFilesWithAI(
+  files: File[],
+  existingProjectBlocks: MarkdownImportContextBlock[],
+  existingBlockIds: string[],
+): Promise<MarkdownImportResult> {
+  const { candidates, warnings } = await prepareMarkdownImports(files, existingBlockIds)
+  if (candidates.length === 0) {
+    return { blocks: [], warnings }
+  }
+
+  if (!loadAIConfig()) {
+    warnings.push("No API key configured. Imported Markdown without AI metadata.")
+    return {
+      blocks: candidates.map(candidate => candidate.block),
+      warnings,
+    }
+  }
+
+  const contextBlocks = existingProjectBlocks.map(block => ({
+    id: block.id,
+    text: block.text,
+    category: block.category,
+    annotation: block.annotation,
+  }))
+
+  const blocks: NodepadPluginBlockInput[] = []
+
+  for (const candidate of candidates) {
+    try {
+      const data = await enrichBlockClient(
+        candidate.enrichmentText,
+        contextBlocks,
+        candidate.explicitType,
+        candidate.categoryHint,
+      )
+
+      const aiInfluencedBy = data.influencedByIndices
+        .map(index => contextBlocks[index]?.id)
+        .filter((id): id is string => Boolean(id))
+
+      const influencedBy = Array.from(new Set(
+        [...(candidate.block.influencedBy ?? []), ...aiInfluencedBy]
+          .filter(id => id !== candidate.block.id),
+      ))
+
+      const annotation = candidate.originalAnnotation?.trim()
+        ? candidate.originalAnnotation.trim()
+        : data.annotation
+      const sources = mergeSources(candidate.block.sources, data.sources)
+
+      const enrichedBlock: PreparedImportBlock = {
+        ...candidate.block,
+        contentType: data.contentType,
+        category: data.category,
+        ...(annotation ? { annotation } : {}),
+        confidence: data.confidence,
+        ...(sources ? { sources } : {}),
+        ...(influencedBy.length > 0 ? { influencedBy } : {}),
+        ...(candidate.block.isUnrelated === true || data.isUnrelated ? { isUnrelated: true } : {}),
+      }
+
+      blocks.push(enrichedBlock)
+      contextBlocks.push({
+        id: enrichedBlock.id,
+        text: enrichedBlock.text,
+        category: enrichedBlock.category,
+        annotation: enrichedBlock.annotation,
+      })
+    } catch (error) {
+      console.error(`Markdown AI enrichment failed for ${candidate.fileName}`, error)
+      warnings.push(`AI enrichment failed for ${candidate.fileName}; imported with original Markdown only.`)
+      blocks.push(candidate.block)
+      contextBlocks.push({
+        id: candidate.block.id,
+        text: candidate.block.text,
+        category: candidate.block.category,
+        annotation: candidate.block.annotation,
+      })
+    }
+  }
 
   return { blocks, warnings }
 }
