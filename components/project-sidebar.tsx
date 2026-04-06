@@ -26,6 +26,11 @@ import {
   type AISettings,
   type AIProvider,
 } from "@/lib/ai-settings"
+import type {
+  RegisteredNodepadPlugin,
+  NodepadPluginSettings,
+  NodepadPluginSettingValue,
+} from "@/lib/plugins"
 
 interface Project {
   id: string
@@ -49,6 +54,11 @@ interface ProjectSidebarProps {
   // AI Settings
   aiSettings: AISettings
   onUpdateAISettings: (patch: Partial<AISettings>) => void
+  plugins: RegisteredNodepadPlugin[]
+  enabledPluginIds: string[]
+  pluginSettingsByPluginId: Record<string, NodepadPluginSettings>
+  onUpdateEnabledPluginIds: (ids: string[]) => void
+  onUpdatePluginSetting: (pluginId: string, settingId: string, value: NodepadPluginSettingValue) => void
 }
 
 export function ProjectSidebar({
@@ -63,6 +73,11 @@ export function ProjectSidebar({
   onDeleteProject,
   aiSettings,
   onUpdateAISettings,
+  plugins,
+  enabledPluginIds,
+  pluginSettingsByPluginId,
+  onUpdateEnabledPluginIds,
+  onUpdatePluginSetting,
   openToSettings,
   onSettingsOpened,
 }: ProjectSidebarProps) {
@@ -75,6 +90,8 @@ export function ProjectSidebar({
   const [providerOpen, setProviderOpen] = useState(false)
   // local draft for settings (only save on "Save")
   const [draft, setDraft] = useState<AISettings>(aiSettings)
+  const [pluginDraft, setPluginDraft] = useState<string[]>(enabledPluginIds)
+  const [pluginSettingsDraft, setPluginSettingsDraft] = useState<Record<string, NodepadPluginSettings>>(pluginSettingsByPluginId)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -86,8 +103,12 @@ export function ProjectSidebar({
 
   // Sync draft when panel opens
   useEffect(() => {
-    if (showSettings) setDraft(aiSettings)
-  }, [showSettings])
+    if (showSettings) {
+      setDraft(aiSettings)
+      setPluginDraft(enabledPluginIds)
+      setPluginSettingsDraft(pluginSettingsByPluginId)
+    }
+  }, [showSettings, aiSettings, enabledPluginIds, pluginSettingsByPluginId])
 
   // Jump straight to settings when requested externally
   useEffect(() => {
@@ -120,6 +141,36 @@ export function ProjectSidebar({
   const currentPreset = getPreset(draft.provider)
   const models = getModelsForProvider(draft.provider)
   const selectedModel = models.find(m => m.id === draft.modelId) || models[0] || undefined
+  const handleTogglePlugin = (pluginId: string) => {
+    const next = pluginDraft.includes(pluginId)
+      ? pluginDraft.filter(id => id !== pluginId)
+      : [...pluginDraft, pluginId]
+
+    setPluginDraft(next)
+    onUpdateEnabledPluginIds(next)
+  }
+
+  const handlePluginSettingChange = (pluginId: string, settingId: string, value: NodepadPluginSettingValue) => {
+    setPluginSettingsDraft(prev => ({
+      ...prev,
+      [pluginId]: {
+        ...(prev[pluginId] ?? {}),
+        [settingId]: value,
+      },
+    }))
+    onUpdatePluginSetting(pluginId, settingId, value)
+  }
+
+  const normalizeColorValue = (value: NodepadPluginSettingValue | undefined, fallback: string) => {
+    if (typeof value !== "string") return fallback
+    const trimmed = value.trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed
+    if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+      const [, r, g, b] = trimmed
+      return `#${r}${r}${g}${g}${b}${b}`.toLowerCase()
+    }
+    return fallback
+  }
 
   return (
     <div
@@ -464,6 +515,125 @@ export function ProjectSidebar({
                     </button>
                   </div>
                 )}
+
+                {/* Plugins */}
+                <div className="flex flex-col gap-2">
+                  <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                    Plugins
+                  </label>
+                  <div className="rounded-md border border-white/5 bg-white/[0.02] overflow-hidden">
+                    {plugins.length > 0 ? (
+                      plugins.map(plugin => {
+                        const enabled = pluginDraft.includes(plugin.manifest.id)
+                        const pluginSettings = pluginSettingsDraft[plugin.manifest.id] ?? {}
+                        const settings = plugin.module?.settings ?? []
+                        return (
+                          <div
+                            key={plugin.manifest.id}
+                            className="flex items-start justify-between gap-3 border-b border-white/5 px-2.5 py-2.5 last:border-b-0"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="font-mono text-[11px] font-bold text-foreground">
+                                {plugin.manifest.label}
+                              </div>
+                              <div className="font-mono text-[9px] text-muted-foreground mt-0.5 leading-relaxed">
+                                {plugin.manifest.description}
+                              </div>
+                              {enabled && settings.length > 0 && (
+                                <div className="mt-2 space-y-2 rounded-md border border-white/5 bg-black/15 px-2 py-2">
+                                  {settings.map((setting) => {
+                                    switch (setting.type) {
+                                      case "color": {
+                                        const rawValue = pluginSettings[setting.id]
+                                        const colorValue = normalizeColorValue(rawValue, setting.defaultValue)
+                                        return (
+                                          <div key={setting.id} className="space-y-1.5">
+                                            <div>
+                                              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-foreground/80">
+                                                {setting.label}
+                                              </div>
+                                              {setting.description && (
+                                                <div className="font-mono text-[8px] text-muted-foreground leading-relaxed mt-0.5">
+                                                  {setting.description}
+                                                </div>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <input
+                                                type="color"
+                                                value={colorValue}
+                                                onChange={(e) => handlePluginSettingChange(plugin.manifest.id, setting.id, e.target.value)}
+                                                className="h-7 w-9 cursor-pointer rounded border border-white/10 bg-transparent p-0"
+                                              />
+                                              <input
+                                                value={typeof rawValue === "string" ? rawValue : setting.defaultValue}
+                                                onChange={(e) => handlePluginSettingChange(plugin.manifest.id, setting.id, e.target.value)}
+                                                spellCheck={false}
+                                                className="flex-1 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1.5 font-mono text-[10px] text-foreground outline-none placeholder:text-muted-foreground/40 focus:border-primary/50"
+                                              />
+                                            </div>
+                                          </div>
+                                        )
+                                      }
+                                      case "textarea": {
+                                        const rawValue = pluginSettings[setting.id]
+                                        const textValue = typeof rawValue === "string"
+                                          ? rawValue
+                                          : setting.defaultValue
+                                        return (
+                                          <div key={setting.id} className="space-y-1.5">
+                                            <div>
+                                              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-foreground/80">
+                                                {setting.label}
+                                              </div>
+                                              {setting.description && (
+                                                <div className="font-mono text-[8px] text-muted-foreground leading-relaxed mt-0.5">
+                                                  {setting.description}
+                                                </div>
+                                              )}
+                                            </div>
+                                            <textarea
+                                              value={textValue}
+                                              onChange={(e) => handlePluginSettingChange(plugin.manifest.id, setting.id, e.target.value)}
+                                              rows={setting.rows ?? 6}
+                                              placeholder={setting.placeholder}
+                                              spellCheck={false}
+                                              className="min-h-24 w-full resize-y rounded-md border border-white/10 bg-white/[0.04] px-2 py-1.5 font-mono text-[10px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/40 focus:border-primary/50"
+                                            />
+                                          </div>
+                                        )
+                                      }
+                                      default:
+                                        return null
+                                    }
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleTogglePlugin(plugin.manifest.id)}
+                              className={`relative shrink-0 h-5 w-9 rounded-full transition-all duration-200 ${
+                                enabled ? "bg-primary" : "bg-white/10"
+                              }`}
+                              title={enabled ? `Disable ${plugin.manifest.label}` : `Enable ${plugin.manifest.label}`}
+                            >
+                              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${
+                                enabled ? "left-5" : "left-0.5"
+                              }`} />
+                            </button>
+                          </div>
+                        )
+                      })
+                    ) : (
+                      <div className="px-2.5 py-2.5 font-mono text-[9px] text-muted-foreground leading-relaxed">
+                        No plugins detected in <code className="text-foreground/70">plugins/*/plugin.json</code>.
+                      </div>
+                    )}
+                  </div>
+                  <p className="font-mono text-[9px] text-muted-foreground leading-relaxed">
+                    Detected from <code className="text-foreground/70">plugins/*/plugin.json</code> on startup. Plugin toggles apply immediately and are saved in this browser.
+                  </p>
+                </div>
 
                 {/* API Status */}
                 <div className={`flex items-center gap-2 rounded-md px-2.5 py-2 font-mono text-[9px] ${

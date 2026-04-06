@@ -11,7 +11,7 @@ interface TileIndexProps {
   highlightedId: string | null
   onClose?: () => void
   isOpen: boolean
-  viewMode: "tiling" | "kanban" | "graph" | "graph2"
+  viewMode: string
 }
 
 export function TileIndex({ blocks, onHighlight, highlightedId, onClose, isOpen, viewMode }: TileIndexProps) {

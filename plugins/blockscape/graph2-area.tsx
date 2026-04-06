@@ -1,48 +1,23 @@
 "use client"
 
 import * as React from "react"
-import { CONTENT_TYPE_CONFIG, type ContentType } from "@/lib/content-types"
+import { CONTENT_TYPE_CONFIG } from "@/lib/content-types"
 import type { TextBlock } from "@/components/tile-card"
+import type { NodepadPluginViewProps } from "@/lib/plugins"
 import { Graph2DetailPanel } from "./graph2-detail-panel"
+import {
+  BLOCKSCAPE_CATEGORY_MAPPINGS_SETTING_ID,
+  type BlockscapeDisplayConfig,
+  resolveBlockscapeDisplayConfig,
+} from "./display-settings"
 import { useModKey } from "@/lib/utils"
 
-interface Graph2AreaProps {
-  blocks: TextBlock[]
-  ghostNote?: { id: string; text: string; category: string; isGenerating: boolean }
-  projectName: string
-  onReEnrich: (id: string) => void
-  onChangeType: (id: string, newType: ContentType) => void
-  onTogglePin: (id: string) => void
-  onEdit: (id: string, text: string) => void
-  onEditAnnotation: (id: string, annotation: string) => void
-  highlightedBlockId?: string | null
-  onHighlight?: (id: string | null) => void
-}
-
-const BLOCKSCAPE_CATEGORY_MAP = {
-  entity: { id: "entity", title: "Entities" },
-  idea: { id: "idea", title: "Ideas" },
-  question: { id: "question", title: "Questions" },
-  comparison: { id: "comparison", title: "Comparisons" },
-  opinion: { id: "opinion", title: "Opinions" },
-  reference: { id: "reference", title: "References" },
-} as const
-
-const BLOCKSCAPE_CATEGORY_ORDER = [
-  "entity",
-  "idea",
-  "question",
-  "comparison",
-  "opinion",
-  "reference",
-] as const
-
-type BlockscapeCategoryId = typeof BLOCKSCAPE_CATEGORY_ORDER[number]
+type Graph2AreaProps = NodepadPluginViewProps
 
 interface BlockscapeNode {
   id: string
   block: TextBlock
-  categoryId: BlockscapeCategoryId
+  categoryId: string
   deps: string[]
   dependents: string[]
   label: string
@@ -54,8 +29,9 @@ interface BlockscapeNode {
 }
 
 interface BlockscapeLane {
-  id: BlockscapeCategoryId
+  id: string
   title: string
+  mappedTypes: string
   items: BlockscapeNode[]
   top: number
   centerY: number
@@ -114,17 +90,57 @@ const LETTER_COLOR_PALETTE: Record<string, string> = {
   Z: "#fb7185",
 }
 const LETTER_COLOR_FALLBACK = "#9ca3af"
+const DEFAULT_BLOCKSCAPE_BACKGROUND = "#0f1729"
 
 function truncate(text: string, length = 80): string {
   return text.slice(0, length)
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value))
+function normalizeHexColor(value: unknown, fallback = DEFAULT_BLOCKSCAPE_BACKGROUND): string {
+  if (typeof value !== "string") return fallback
+  const trimmed = value.trim()
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed.toLowerCase()
+  if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+    const [, r, g, b] = trimmed
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase()
+  }
+  return fallback
 }
 
-function isBlockscapeType(type: ContentType): type is BlockscapeCategoryId {
-  return (BLOCKSCAPE_CATEGORY_ORDER as readonly string[]).includes(type)
+function hexToRgb(hex: string) {
+  const normalized = normalizeHexColor(hex)
+  return {
+    r: Number.parseInt(normalized.slice(1, 3), 16),
+    g: Number.parseInt(normalized.slice(3, 5), 16),
+    b: Number.parseInt(normalized.slice(5, 7), 16),
+  }
+}
+
+function rgbToHex(r: number, g: number, b: number) {
+  return `#${[r, g, b]
+    .map(value => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0"))
+    .join("")}`
+}
+
+function mixHexColors(colorA: string, colorB: string, amount: number) {
+  const a = hexToRgb(colorA)
+  const b = hexToRgb(colorB)
+  const weight = clamp(amount, 0, 1)
+
+  return rgbToHex(
+    a.r + (b.r - a.r) * weight,
+    a.g + (b.g - a.g) * weight,
+    a.b + (b.b - a.b) * weight,
+  )
+}
+
+function withAlpha(hex: string, alpha: number) {
+  const { r, g, b } = hexToRgb(hex)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
 }
 
 function getBadgeLetter(text: string): string {
@@ -151,6 +167,18 @@ function compareLaneOrder(a: BlockscapeNode, b: BlockscapeNode): number {
   if (a.block.timestamp !== b.block.timestamp) return a.block.timestamp - b.block.timestamp
 
   return a.id.localeCompare(b.id)
+}
+
+function compareLaneOrderByType(
+  categoryTypeOrder: readonly string[],
+  a: BlockscapeNode,
+  b: BlockscapeNode,
+): number {
+  const aTypeIndex = categoryTypeOrder.indexOf(a.block.contentType)
+  const bTypeIndex = categoryTypeOrder.indexOf(b.block.contentType)
+
+  if (aTypeIndex !== bTypeIndex) return aTypeIndex - bTypeIndex
+  return compareLaneOrder(a, b)
 }
 
 function distributeLane(
@@ -208,10 +236,10 @@ function distributeLane(
 function buildBlockscapeLayout(
   blocks: TextBlock[],
   dims: { w: number; h: number },
+  displayConfig: BlockscapeDisplayConfig,
 ): BlockscapeLayout {
   const visibleBlocks = blocks.filter(
-    (block): block is TextBlock & { contentType: BlockscapeCategoryId } =>
-      isBlockscapeType(block.contentType),
+    block => displayConfig.typeToCategoryId.has(block.contentType),
   )
   const hiddenCount = blocks.length - visibleBlocks.length
 
@@ -232,7 +260,7 @@ function buildBlockscapeLayout(
   const nodes = visibleBlocks.map((block): BlockscapeNode => ({
     id: block.id,
     block,
-    categoryId: block.contentType,
+    categoryId: displayConfig.typeToCategoryId.get(block.contentType) ?? "",
     deps: (block.influencedBy || []).filter(id => visibleIds.has(id)),
     dependents: [],
     label: truncate(block.text || ""),
@@ -251,11 +279,14 @@ function buildBlockscapeLayout(
     })
   })
 
-  const lanes = BLOCKSCAPE_CATEGORY_ORDER
-    .map((id): BlockscapeLane => ({
-      id,
-      title: BLOCKSCAPE_CATEGORY_MAP[id].title,
-      items: nodes.filter(node => node.categoryId === id).sort(compareLaneOrder),
+  const lanes = displayConfig.categories
+    .map((category): BlockscapeLane => ({
+      id: category.id,
+      title: category.title,
+      mappedTypes: category.types.join(", "),
+      items: nodes
+        .filter(node => node.categoryId === category.id)
+        .sort((a, b) => compareLaneOrderByType(category.types, a, b)),
       top: 0,
       centerY: 0,
     }))
@@ -350,6 +381,7 @@ export function Graph2Area({
   blocks,
   ghostNote,
   projectName,
+  pluginSettings,
   onReEnrich,
   onChangeType,
   onTogglePin,
@@ -380,10 +412,39 @@ export function Graph2Area({
     return () => obs.disconnect()
   }, [])
 
-  const layout = React.useMemo(() => buildBlockscapeLayout(blocks, dims), [blocks, dims])
+  const categoryMappingValue = pluginSettings[BLOCKSCAPE_CATEGORY_MAPPINGS_SETTING_ID]
+  const displayConfig = React.useMemo(
+    () => resolveBlockscapeDisplayConfig(categoryMappingValue),
+    [categoryMappingValue],
+  )
+  const layout = React.useMemo(
+    () => buildBlockscapeLayout(blocks, dims, displayConfig),
+    [blocks, dims, displayConfig],
+  )
   const nodeMap = React.useMemo(
     () => new Map(layout.nodes.map(node => [node.id, node])),
     [layout.nodes],
+  )
+  const configuredLaneSummary = React.useMemo(
+    () => displayConfig.categories.map(category => category.title).join(", "),
+    [displayConfig],
+  )
+  const backgroundSettingValue = pluginSettings.backgroundColor
+  const backgroundColor = React.useMemo(
+    () => normalizeHexColor(backgroundSettingValue, DEFAULT_BLOCKSCAPE_BACKGROUND),
+    [backgroundSettingValue],
+  )
+  const backgroundTop = React.useMemo(
+    () => mixHexColors(backgroundColor, "#000000", 0.24),
+    [backgroundColor],
+  )
+  const glowAColor = React.useMemo(
+    () => mixHexColors(backgroundColor, "#60a5fa", 0.58),
+    [backgroundColor],
+  )
+  const glowBColor = React.useMemo(
+    () => mixHexColors(backgroundColor, "#22d3ee", 0.48),
+    [backgroundColor],
   )
   const visibleBlocks = React.useMemo(
     () => layout.nodes.map(node => node.block),
@@ -467,7 +528,7 @@ export function Graph2Area({
       <div
         ref={containerRef}
         style={{ width: selectedId ? "70%" : "100%" }}
-        className="relative h-full overflow-hidden bg-[#0b1020] transition-all duration-300"
+        className="relative h-full overflow-hidden transition-all duration-300"
       >
         {layout.nodes.length === 0 ? (
           <div className="absolute inset-0 flex items-center justify-center px-10 text-center">
@@ -475,14 +536,31 @@ export function Graph2Area({
               <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-foreground/35">
                 blockscape view
               </p>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Blockscape maps only six note types into fixed lanes:
-                {" "}
-                <span className="text-foreground/80">entity, idea, question, comparison, opinion, reference</span>.
-              </p>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Add notes in those categories to build the map, then hover a node to dim unrelated branches and click any card to inspect it.
-              </p>
+              {displayConfig.categories.length > 0 ? (
+                <>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Blockscape maps notes into plugin-defined lanes.
+                    {" "}
+                    <span className="text-foreground/80">{configuredLaneSummary}</span>
+                    {" "}
+                    are active right now.
+                  </p>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Add notes in those mapped types to build the map, then hover a node to dim unrelated branches and click any card to inspect it. Edit Settings → Plugins → Blockscape to change categories and mappings. Unmapped note types stay hidden.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    No valid Blockscape category mappings are configured.
+                  </p>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Edit Settings → Plugins → Blockscape and use one line per lane in the form
+                    {" "}
+                    <span className="text-foreground/80">Category: type, type</span>.
+                  </p>
+                </>
+              )}
               <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-foreground/55">
                 {`type anything · #type to classify · ${mod}K for commands`}
               </p>
@@ -507,16 +585,16 @@ export function Graph2Area({
             >
               <defs>
                 <linearGradient id="blockscape-bg" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="rgba(12, 18, 32, 0.99)" />
-                  <stop offset="100%" stopColor="rgba(15, 23, 41, 0.97)" />
+                  <stop offset="0%" stopColor={withAlpha(backgroundTop, 0.99)} />
+                  <stop offset="100%" stopColor={withAlpha(backgroundColor, 0.97)} />
                 </linearGradient>
                 <radialGradient id="blockscape-glow-a" cx="0%" cy="0%" r="100%">
-                  <stop offset="0%" stopColor="rgba(70, 111, 220, 0.16)" />
-                  <stop offset="100%" stopColor="rgba(70, 111, 220, 0)" />
+                  <stop offset="0%" stopColor={withAlpha(glowAColor, 0.16)} />
+                  <stop offset="100%" stopColor={withAlpha(glowAColor, 0)} />
                 </radialGradient>
                 <radialGradient id="blockscape-glow-b" cx="100%" cy="100%" r="100%">
-                  <stop offset="0%" stopColor="rgba(59, 130, 246, 0.12)" />
-                  <stop offset="100%" stopColor="rgba(59, 130, 246, 0)" />
+                  <stop offset="0%" stopColor={withAlpha(glowBColor, 0.12)} />
+                  <stop offset="100%" stopColor={withAlpha(glowBColor, 0)} />
                 </radialGradient>
               </defs>
 
@@ -579,6 +657,9 @@ export function Graph2Area({
                       style={{ letterSpacing: "0.14em", userSelect: "none" }}
                     >
                       <tspan>{lane.title.toUpperCase()}</tspan>
+                      {lane.mappedTypes && (
+                        <tspan fill="rgba(191, 203, 227, 0.72)">{` (${lane.mappedTypes})`}</tspan>
+                      )}
                       <tspan dx={8} fill="rgba(163, 177, 206, 0.58)">
                         {lane.items.length} items
                       </tspan>

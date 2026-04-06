@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "generate:plugins": "node scripts/generate-plugin-registry.mjs",
+    "predev": "npm run generate:plugins",
+    "prebuild": "npm run generate:plugins",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

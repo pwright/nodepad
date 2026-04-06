@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { CONTENT_TYPE_CONFIG } from "@/lib/content-types"
+import type { NodepadPluginActionContribution, NodepadPluginViewContribution } from "@/lib/plugins"
 import {
   Sparkles, Layers, Kanban, GitFork, FolderDown,
   FolderInput, Download, Brain, Zap, Globe, Search, Check, Mail
@@ -12,6 +13,8 @@ import { useModKey } from "@/lib/utils"
 interface AboutPanelProps {
   open: boolean
   onClose: () => void
+  pluginViews: NodepadPluginViewContribution[]
+  pluginActions: NodepadPluginActionContribution[]
 }
 
 function CopyEmailButton() {
@@ -94,7 +97,7 @@ const CONTENT_TYPE_HIGHLIGHTS = [
   "claim", "question", "idea", "task", "thesis", "quote", "entity", "reference"
 ] as const
 
-export function AboutPanel({ open, onClose }: AboutPanelProps) {
+export function AboutPanel({ open, onClose, pluginViews, pluginActions }: AboutPanelProps) {
   const mod = useModKey()
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose() }}>
@@ -244,13 +247,20 @@ export function AboutPanel({ open, onClose }: AboutPanelProps) {
                   <p className="text-sm text-muted-foreground">An interactive force-directed graph of all your nodes. Connections between them become the focus — highly-connected nodes drift toward the centre, isolated ones settle at the periphery. Click any node to open its full detail panel. Hover to dim unrelated nodes.</p>
                 </div>
               </div>
-              <div className="flex gap-3 p-3 rounded-sm bg-secondary/30 border border-border/50">
-                <GitFork className="h-4 w-4 flex-shrink-0 text-primary mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground mb-0.5">Blockscape</p>
-                  <p className="text-sm text-muted-foreground">A structured dependency map. Nodes are sorted into fixed lanes by type: Entities, Ideas, Questions, Comparisons, Opinions, and References. Dependencies pull related cards into vertical clusters, making branches and chains easier to scan.</p>
-                </div>
-              </div>
+              {pluginViews
+                .filter(view => view.about)
+                .map((view) => {
+                  const Icon = view.icon
+                  return (
+                    <div key={view.id} className="flex gap-3 p-3 rounded-sm bg-secondary/30 border border-border/50">
+                      <Icon className="h-4 w-4 flex-shrink-0 text-primary mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-foreground mb-0.5">{view.label}</p>
+                        <p className="text-sm text-muted-foreground">{view.about?.description}</p>
+                      </div>
+                    </div>
+                  )
+                })}
             </div>
           </Section>
 
@@ -292,6 +302,22 @@ export function AboutPanel({ open, onClose }: AboutPanelProps) {
                   <p className="text-sm text-muted-foreground">Export a richly formatted Markdown document with YAML front matter, a table of contents, grouped sections, confidence tables for claims, and cited sources.</p>
                 </div>
               </div>
+              {pluginActions
+                .filter(action => action.about)
+                .map((action) => {
+                  const Icon = action.icon
+                  return (
+                    <div key={action.id} className="flex gap-3">
+                      <Icon className="h-4 w-4 flex-shrink-0 text-primary/70 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-foreground mb-0.5">
+                          {action.about?.title || action.label}
+                        </p>
+                        <p className="text-sm text-muted-foreground">{action.about?.description}</p>
+                      </div>
+                    </div>
+                  )
+                })}
               <div className="flex gap-3">
                 <FolderInput className="h-4 w-4 flex-shrink-0 text-primary/70 mt-0.5" />
                 <div>
