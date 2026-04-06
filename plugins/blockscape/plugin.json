@@ -1,0 +1,6 @@
+{
+  "id": "blockscape",
+  "label": "Blockscape",
+  "description": "Structured graph view plus Blockscape JSON export",
+  "enabledByDefault": false
+}

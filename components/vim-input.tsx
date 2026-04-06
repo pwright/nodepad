@@ -9,15 +9,7 @@ import {
 } from "lucide-react"
 import { Command } from "cmdk"
 import { useModKey } from "@/lib/utils"
-
-const ACTION_ITEMS = [
-  { id: "export-nodepad", icon: FolderDown,  label: "Export",  sub: ".nodepad"  },
-  { id: "import-nodepad", icon: FolderInput, label: "Import",  sub: ".nodepad"  },
-  { id: "export-blockscape", icon: Download, label: "Export",  sub: "blockscape" },
-  { id: "export-md",      icon: Download,    label: "Export",  sub: "markdown"  },
-  { id: "copy-md",        icon: Clipboard,   label: "Copy",    sub: "markdown"  },
-  { id: "clear",          icon: Trash2,      label: "Clear",   sub: "canvas"    },
-]
+import type { NodepadPluginActionContribution, NodepadPluginViewContribution } from "@/lib/plugins"
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -26,11 +18,20 @@ interface VimInputProps {
   onCommand: (cmd: string, text?: string) => void
   isCommandKOpen: boolean
   setIsCommandKOpen: (open: boolean) => void
+  pluginViews: NodepadPluginViewContribution[]
+  pluginActions: NodepadPluginActionContribution[]
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpen }: VimInputProps) {
+export function VimInput({
+  onSubmit,
+  onCommand,
+  isCommandKOpen,
+  setIsCommandKOpen,
+  pluginViews,
+  pluginActions,
+}: VimInputProps) {
   const [value, setValue] = React.useState("")
   const [search, setSearch] = React.useState("")
   const [focusedIdx, setFocusedIdx] = React.useState(0)
@@ -42,12 +43,31 @@ export function VimInput({ onSubmit, onCommand, isCommandKOpen, setIsCommandKOpe
 
   // ── Items (mod-key aware) ───────────────────────────────────────────────
 
+  const ACTION_ITEMS = React.useMemo(() => [
+    { id: "export-nodepad", icon: FolderDown,  label: "Export",  sub: ".nodepad"  },
+    { id: "import-nodepad", icon: FolderInput, label: "Import",  sub: ".nodepad"  },
+    ...pluginActions.map(action => ({
+      id: action.id,
+      icon: action.icon,
+      label: action.label,
+      sub: action.sub ?? "",
+    })),
+    { id: "export-md",      icon: Download,    label: "Export",  sub: "markdown"  },
+    { id: "copy-md",        icon: Clipboard,   label: "Copy",    sub: "markdown"  },
+    { id: "clear",          icon: Trash2,      label: "Clear",   sub: "canvas"    },
+  ], [pluginActions])
+
   const VIEW_ITEMS = React.useMemo(() => [
     { id: "tiling", icon: Grid,    label: "Tiling", sub: "" },
     { id: "kanban", icon: Trello,  label: "Kanban", sub: "" },
     { id: "graph",  icon: GitFork, label: "Graph",  sub: "" },
-    { id: "graph2", icon: GitFork, label: "Blockscape", sub: "" },
-  ], [])
+    ...pluginViews.map(view => ({
+      id: view.id,
+      icon: view.icon,
+      label: view.label,
+      sub: "",
+    })),
+  ], [pluginViews])
 
   const NAV_ITEMS = React.useMemo(() => [
     { id: "open-projects",  icon: FolderOpen, label: "Projects",    sub: "" },

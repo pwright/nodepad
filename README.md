@@ -70,6 +70,12 @@ Double-click any note to edit. Click the type label to reclassify manually.
 
 ---
 
+## Plugins
+
+Optional features can be shipped in-repo but kept disabled by default. See [plugins.md](plugins.md) for the current plugin model and how to enable the included `Blockscape` plugin.
+
+---
+
 ## Data
 
 Everything lives in your browser. No account, no server, no database.

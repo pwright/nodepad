@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import { CONTENT_TYPE_CONFIG } from "@/lib/content-types"
 import type { TextBlock } from "@/components/tile-card"
 import { AboutPanel } from "@/components/about-panel"
+import type { NodepadPluginActionContribution, NodepadPluginViewContribution } from "@/lib/plugins"
 
 import { Menu, LayoutList, Sparkles } from "lucide-react"
 
@@ -20,6 +21,8 @@ interface StatusBarProps {
   onIndexToggle: () => void
   onGhostPanelToggle: () => void
   modelLabel?: string
+  pluginViews: NodepadPluginViewContribution[]
+  pluginActions: NodepadPluginActionContribution[]
   showHelpTooltip?: boolean
   onHelpTooltipDismiss?: () => void
 }
@@ -36,6 +39,8 @@ export function StatusBar({
   onIndexToggle,
   onGhostPanelToggle,
   modelLabel,
+  pluginViews,
+  pluginActions,
   showHelpTooltip,
   onHelpTooltipDismiss,
 }: StatusBarProps) {
@@ -230,8 +235,12 @@ export function StatusBar({
         </div>
       </div>
 
-      <AboutPanel open={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
+      <AboutPanel
+        open={isAboutOpen}
+        onClose={() => setIsAboutOpen(false)}
+        pluginViews={pluginViews}
+        pluginActions={pluginActions}
+      />
     </header>
   )
 }
-

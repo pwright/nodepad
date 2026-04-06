@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "framer-motion"
 import { TilingArea } from "@/components/tiling-area"
 import { KanbanArea } from "@/components/kanban-area"
 import { GraphArea } from "@/components/graph-area"
-import { Graph2Area } from "@/components/graph2-area"
 import { ProjectSidebar } from "@/components/project-sidebar"
 import { StatusBar } from "@/components/status-bar"
 import { GhostPanel, type GhostNote } from "@/components/ghost-panel"
@@ -17,9 +16,10 @@ import { INITIAL_PROJECTS } from "@/lib/initial-data"
 import { useAISettings } from "@/lib/ai-settings"
 import { enrichBlockClient } from "@/lib/ai-enrich"
 import { generateGhostClient } from "@/lib/ai-ghost"
-import { exportToMarkdown, exportToBlockscape, downloadMarkdown, downloadJson, copyToClipboard } from "@/lib/export"
+import { exportToMarkdown, downloadMarkdown, downloadJson, copyToClipboard } from "@/lib/export"
 import { downloadNodepadFile, parseNodepadFile, NodepadParseError } from "@/lib/nodepad-format"
 import { detectContentType } from "@/lib/detect-content-type"
+import { usePlugins } from "@/lib/use-plugins"
 
 function generateId() {
   return Math.random().toString(36).substring(2, 10)
@@ -39,7 +39,21 @@ export interface Project {
 
 import { TileIndex } from "@/components/tile-index"
 
+const CORE_VIEW_IDS = ["tiling", "kanban", "graph"] as const
+
+function isCoreViewId(viewId: string): viewId is typeof CORE_VIEW_IDS[number] {
+  return (CORE_VIEW_IDS as readonly string[]).includes(viewId)
+}
+
 export default function Page() {
+  const {
+    plugins,
+    enabledPlugins,
+    enabledPluginIds,
+    pluginSettingsByPluginId,
+    setEnabledPluginIds,
+    setPluginSetting,
+  } = usePlugins()
   const [projects, setProjects] = useState<Project[]>([])
   const [activeProjectId, setActiveProjectId] = useState<string>("")
   const [highlightedBlockId, setHighlightedBlockId] = useState<string | null>(null)
@@ -47,7 +61,7 @@ export default function Page() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isIndexOpen, setIsIndexOpen] = useState(false)
   const [isGhostPanelOpen, setIsGhostPanelOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<"tiling" | "kanban" | "graph" | "graph2">("tiling")
+  const [viewMode, setViewMode] = useState<string>("tiling")
   const [isCommandKOpen, setIsCommandKOpen] = useState(false)
   const [jumpToSettings, setJumpToSettings] = useState(false)
   const [isIntroOpen, setIsIntroOpen] = useState(false)
@@ -55,6 +69,32 @@ export default function Page() {
   const helpTooltipTimer = useRef<NodeJS.Timeout | null>(null)
   const { settings, updateSettings, resolvedModelId, currentModel } = useAISettings()
   const debounceTimers = useRef<Record<string, Record<string, NodeJS.Timeout>>>({})
+  const enabledPluginViews = useMemo(
+    () => enabledPlugins.flatMap(plugin =>
+      (plugin.module?.views ?? []).map(view => ({
+        ...view,
+        pluginId: plugin.manifest.id,
+      })),
+    ),
+    [enabledPlugins],
+  )
+  const enabledPluginActions = useMemo(
+    () => enabledPlugins.flatMap(plugin =>
+      (plugin.module?.actions ?? []).map(action => ({
+        ...action,
+        pluginId: plugin.manifest.id,
+      })),
+    ),
+    [enabledPlugins],
+  )
+  const enabledPluginViewMap = useMemo(
+    () => new Map(enabledPluginViews.map(view => [view.id, view])),
+    [enabledPluginViews],
+  )
+  const enabledPluginActionMap = useMemo(
+    () => new Map(enabledPluginActions.map(action => [action.id, action])),
+    [enabledPluginActions],
+  )
 
   // ── Undo history ring (max 20 block snapshots per project) ───────────────
   const blockHistoryRef = useRef<Record<string, TextBlock[][]>>({})
@@ -128,6 +168,12 @@ export default function Page() {
     }
     prevActiveProjectId.current = activeProjectId
   }, [activeProjectId])
+
+  useEffect(() => {
+    if (!isCoreViewId(viewMode) && !enabledPluginViewMap.has(viewMode)) {
+      setViewMode("graph")
+    }
+  }, [enabledPluginViewMap, viewMode])
 
   // 1. Persistence: Initial Load & Migration
   useEffect(() => {
@@ -244,6 +290,10 @@ export default function Page() {
   // A ref to read current projects without causing re-renders or stale closures
   const projectsRef = useRef(projects)
   useEffect(() => { projectsRef.current = projects }, [projects])
+
+  const getActiveProjectSnapshot = useCallback(() => {
+    return projectsRef.current.find(project => project.id === activeProjectId) || null
+  }, [activeProjectId])
 
   // Stable ref to active blocks — lets useCallbacks read current blocks without
   // listing `blocks` in their deps (which would recreate them on every state change
@@ -776,8 +826,8 @@ export default function Page() {
       setViewMode("tiling")
     } else if (cmd === "graph") {
       setViewMode("graph")
-    } else if (cmd === "graph2") {
-      setViewMode("graph2")
+    } else if (enabledPluginViewMap.has(cmd)) {
+      setViewMode(cmd)
     } else if (cmd === "open-projects") {
       setIsGhostPanelOpen(false)
       setIsIndexOpen(false)
@@ -800,45 +850,36 @@ export default function Page() {
     
     // .nodepad export / import
     else if (cmd === "export-nodepad") {
-      setProjects(prev => {
-        const proj = prev.find(p => p.id === activeProjectId)
-        if (proj) downloadNodepadFile(proj)
-        return prev
-      })
+      const project = getActiveProjectSnapshot()
+      if (project) downloadNodepadFile(project)
     } else if (cmd === "import-nodepad") {
       importInputRef.current?.click()
     }
 
     // Export commands — read project from state snapshot via ref to avoid stale closure
     else if (cmd === "export-md") {
-      setProjects(prev => {
-        const proj = prev.find(p => p.id === activeProjectId)
-        if (proj) {
-          const md = exportToMarkdown(proj.name, proj.blocks)
-          const slug = proj.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
-          downloadMarkdown(`${slug}.md`, md)
-        }
-        return prev
-      })
-    } else if (cmd === "export-blockscape") {
-      setProjects(prev => {
-        const proj = prev.find(p => p.id === activeProjectId)
-        if (proj) {
-          const data = exportToBlockscape(proj)
-          const slug = proj.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
-          downloadJson(`${slug || "project"}-blockscape.json`, data)
-        }
-        return prev
-      })
+      const project = getActiveProjectSnapshot()
+      if (project) {
+        const md = exportToMarkdown(project.name, project.blocks)
+        const slug = project.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
+        downloadMarkdown(`${slug}.md`, md)
+      }
+    } else if (enabledPluginActionMap.has(cmd)) {
+      const action = enabledPluginActionMap.get(cmd)
+      if (action) {
+        action.run({
+          activeProject: getActiveProjectSnapshot(),
+          pluginSettings: pluginSettingsByPluginId[action.pluginId] ?? {},
+          downloadJson,
+          setViewMode,
+        })
+      }
     } else if (cmd === "copy-md") {
-      setProjects(prev => {
-        const proj = prev.find(p => p.id === activeProjectId)
-        if (proj) {
-          const md = exportToMarkdown(proj.name, proj.blocks)
-          copyToClipboard(md)
-        }
-        return prev
-      })
+      const project = getActiveProjectSnapshot()
+      if (project) {
+        const md = exportToMarkdown(project.name, project.blocks)
+        copyToClipboard(md)
+      }
     }
     
     // Handle type overrides
@@ -846,7 +887,13 @@ export default function Page() {
     else if (cmd === "thesis" && text) addBlock(text, "thesis")
     
     setIsCommandKOpen(false)
-  }, [clearBlocks, addBlock, activeProjectId])
+  }, [enabledPluginActionMap, enabledPluginViewMap, pluginSettingsByPluginId, clearBlocks, addBlock, createProject, getActiveProjectSnapshot])
+
+  const activePluginView = enabledPluginViewMap.get(viewMode)
+  const ActivePluginView = activePluginView?.component
+  const activePluginSettings = activePluginView
+    ? pluginSettingsByPluginId[activePluginView.pluginId] ?? {}
+    : {}
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
@@ -871,6 +918,11 @@ export default function Page() {
         onImportProject={() => importInputRef.current?.click()}
         aiSettings={settings}
         onUpdateAISettings={updateSettings}
+        plugins={plugins}
+        enabledPluginIds={enabledPluginIds}
+        pluginSettingsByPluginId={pluginSettingsByPluginId}
+        onUpdateEnabledPluginIds={setEnabledPluginIds}
+        onUpdatePluginSetting={setPluginSetting}
         openToSettings={jumpToSettings}
         onSettingsOpened={() => setJumpToSettings(false)}
       />
@@ -888,6 +940,8 @@ export default function Page() {
           onIndexToggle={() => setIsIndexOpen(!isIndexOpen)}
           onGhostPanelToggle={() => setIsGhostPanelOpen(prev => !prev)}
           modelLabel={settings.apiKey ? currentModel.shortLabel : undefined}
+          pluginViews={enabledPluginViews}
+          pluginActions={enabledPluginActions}
           showHelpTooltip={showHelpTooltip}
           onHelpTooltipDismiss={() => {
             setShowHelpTooltip(false)
@@ -966,9 +1020,24 @@ export default function Page() {
                   highlightedBlockId={highlightedBlockId}
                   onHighlight={setHighlightedBlockId}
                 />
+              ) : ActivePluginView ? (
+                <ActivePluginView
+                  key={`${viewMode}-${activeProjectId}`}
+                  blocks={activeProject.blocks}
+                  ghostNote={ghostNotes[ghostNotes.length - 1]}
+                  projectName={activeProject.name}
+                  pluginSettings={activePluginSettings}
+                  onReEnrich={reEnrichBlock}
+                  onChangeType={handleChangeType}
+                  onTogglePin={handleTogglePin}
+                  onEdit={editBlock}
+                  onEditAnnotation={editAnnotation}
+                  highlightedBlockId={highlightedBlockId}
+                  onHighlight={setHighlightedBlockId}
+                />
               ) : (
-                <Graph2Area
-                  key={`graph2-${activeProjectId}`}
+                <GraphArea
+                  key={`graph-${activeProjectId}`}
                   blocks={activeProject.blocks}
                   ghostNote={ghostNotes[ghostNotes.length - 1]}
                   projectName={activeProject.name}
@@ -1017,6 +1086,8 @@ export default function Page() {
           onCommand={handleCommand}
           isCommandKOpen={isCommandKOpen}
           setIsCommandKOpen={setIsCommandKOpen}
+          pluginViews={enabledPluginViews}
+          pluginActions={enabledPluginActions}
         />
       </div>
 
