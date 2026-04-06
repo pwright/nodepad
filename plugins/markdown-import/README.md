@@ -11,12 +11,12 @@ It is designed for small batch imports where you already have a folder of notes 
 - preserves Markdown body content in the node `annotation`
 - maps supported YAML frontmatter fields onto core nodepad block fields
 - resolves `influencedBy` links between imported files when possible
+- optionally uses AI to update node metadata while keeping the imported Markdown body
 
 ## What it does not do
 
 - it does not create a new project
 - it does not replace the current project
-- it does not run AI enrichment during import
 - it does not support every YAML feature
 
 This plugin appends notes into the active project only.
@@ -25,7 +25,9 @@ This plugin appends notes into the active project only.
 
 1. Enable `Markdown Import` in `Settings -> Plugins`.
 2. Open the command palette with `Cmd/Ctrl+K`.
-3. Run `Import -> markdown`.
+3. Run one of:
+   - `Import -> markdown`
+   - `Import -> markdown + AI`
 4. Select one or more Markdown files.
 
 After import:
@@ -33,6 +35,17 @@ After import:
 - each file becomes one node
 - the file body is kept as Markdown in the note annotation
 - if there are mapping warnings, nodepad shows them after import
+
+`Import -> markdown + AI` updates imported node metadata:
+
+- `contentType`
+- `category`
+- `confidence`
+- `sources`
+- `influencedBy`
+- `isUnrelated`
+
+The AI import path keeps the original Markdown body in `annotation`. It does not replace that body with an AI-written note.
 
 ## Practical scope
 
@@ -59,6 +72,7 @@ Type selection:
 
 - frontmatter `contentType` or `type` is used when valid
 - otherwise the plugin falls back to nodepad's normal text heuristics
+- with `Import -> markdown + AI`, AI can refine the metadata after import while preserving the body
 
 ## Supported frontmatter keys
 
@@ -148,4 +162,5 @@ If a reference is ambiguous or cannot be resolved, the import still succeeds and
 - one file always maps to one node
 - frontmatter parsing supports a practical YAML subset, not full YAML
 - folder selection is not built in; select multiple files from the picker instead
-- imported nodes are appended as-is and are not auto-enriched by AI
+- `Import -> markdown + AI` needs a configured OpenRouter API key to apply AI metadata; otherwise the files still import normally
+- the AI import path updates metadata, but intentionally preserves the imported Markdown body instead of replacing it
