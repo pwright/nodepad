@@ -1,0 +1,6 @@
+{
+  "id": "markdown-import",
+  "label": "Markdown Import",
+  "description": "Append Markdown files into the current project",
+  "enabledByDefault": false
+}

@@ -26,6 +26,34 @@ export interface NodepadPluginProject {
   blocks: TextBlock[]
 }
 
+export interface NodepadPluginSourceInput {
+  url: string
+  title: string
+  siteName: string
+}
+
+export interface NodepadPluginSubTaskInput {
+  id?: string
+  text: string
+  isDone?: boolean
+  timestamp?: number
+}
+
+export interface NodepadPluginBlockInput {
+  id?: string
+  text: string
+  timestamp?: number
+  contentType?: ContentType
+  category?: string
+  annotation?: string
+  confidence?: number | null
+  sources?: NodepadPluginSourceInput[]
+  influencedBy?: string[]
+  isUnrelated?: boolean
+  isPinned?: boolean
+  subTasks?: NodepadPluginSubTaskInput[]
+}
+
 export type NodepadPluginSettingValue = string | number | boolean
 export type NodepadPluginSettings = Record<string, NodepadPluginSettingValue>
 
@@ -80,6 +108,7 @@ export interface NodepadPluginActionContext {
   pluginSettings: NodepadPluginSettings
   downloadJson: (filename: string, data: unknown) => void
   setViewMode: (viewId: string) => void
+  appendBlocks: (blocks: NodepadPluginBlockInput[]) => void
 }
 
 export interface NodepadPluginActionContribution {
