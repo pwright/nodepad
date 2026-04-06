@@ -12,6 +12,8 @@ This is the first step of the plugin system. It is intentionally simple:
 
 This means someone can clone `main`, run the stock app, and only opt into extra features when they want them.
 
+Plugin actions can now do more than export: they can also append parsed blocks into the active project via the plugin action context. This keeps project creation and import routing in core, while still allowing optional importers.
+
 ## Default behavior
 
 With optional plugins disabled, nodepad exposes the core feature set only:
@@ -97,6 +99,18 @@ After enabling it, you will see:
 
 - `Blockscape` in the view list in `⌘K`
 - `Export → blockscape` in the actions list in `⌘K`
+
+## Included example: Markdown Import
+
+`Markdown Import` is a lightweight action-only plugin.
+
+When enabled, it adds:
+
+- `Import → markdown` to the `⌘K` command palette
+- a multi-file picker for `.md` and `.markdown` files
+- frontmatter-aware mapping into core nodepad blocks in the active project
+
+It does not create a new project. It appends imported notes into the current one.
 
 ## How to disable it again
 

@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "exportedAt": 1775506003320,
+  "project": {
+    "id": "p-welcome",
+    "name": "✨ Text and json processing",
+    "collapsedIds": [],
+    "ghostNotes": [
+      {
+        "id": "ghost-cpd8727h",
+        "text": "Can GitHub Actions automate AI pipeline integration across Python and Golang for seamless JSON handling?",
+        "category": "Automation-Integration",
+        "isGenerating": false
+      },
+      {
+        "id": "ghost-938uk908",
+        "text": "Does GitHub Actions' JSON handling reveal a hidden dependency between AI workflows and cross-language (Python-Golang) integration?",
+        "category": "Interoperability",
+        "isGenerating": false
+      }
+    ],
+    "lastGhostTexts": [
+      "Can GitHub Actions automate AI pipeline integration across Python and Golang for seamless JSON handling?",
+      "Does GitHub Actions' JSON handling reveal a hidden dependency between AI workflows and cross-language (Python-Golang) integration?"
+    ],
+    "lastGhostBlockCount": 10,
+    "lastGhostTimestamp": 1775505118436,
+    "blocks": [
+      {
+        "id": "w4bzrlnq",
+        "text": "I want to think about multistep pipelines",
+        "timestamp": 1775407650588,
+        "contentType": "idea",
+        "category": "AI Workflow",
+        "annotation": "Multistep pipelines in AI, particularly through techniques like prompt chaining, offer a structured approach to complex tasks by breaking them into discrete, manageable steps. This method enhances the reliability and accuracy of AI outputs by allowing for intermediate checks and adjustments, as highlighted by Ilia Ilinskii in *Rephrase* (2026). Additionally, using frameworks like LangChain LCEL can further refine these processes by integrating specific tools and logic for each step, as discussed by sajosam on *Medium* (2026). These approaches not only improve task execution but also facilitate debugging and enhance explainability.",
+        "confidence": null,
+        "influencedBy": [],
+        "isUnrelated": false
+      },
+      {
+        "id": "7roao4v5",
+        "text": "I want to think about github actions, and other automation",
+        "timestamp": 1775407678891,
+        "contentType": "idea",
+        "category": "GitHub Automation",
+        "annotation": "Exploring GitHub Actions for automation can significantly enhance your development workflow by reducing manual tasks and increasing efficiency. GitHub Actions allows you to automate tasks such as testing, building, and deploying applications through workflows defined in YAML files. These workflows can be triggered by events like code pushes or pull requests. Additionally, the concept of reusable workflows, as discussed in [docs.github.com](https://docs.github.com/en/actions/concepts/workflows-and-actions/reusable-workflows), can help avoid duplication and streamline processes across multiple projects. This aligns with the broader trend of using AI-driven tools, such as GitHub Agentic Workflows, to automate repository tasks, as highlighted by [github.blog](https://github.blog/ai-and-ml/github-copilot/automate-repository-tasks-with-github-agentic-workflows/).",
+        "confidence": null,
+        "influencedBy": [
+          "w4bzrlnq"
+        ],
+        "isUnrelated": false
+      },
+      {
+        "id": "4di4kqz1",
+        "text": "I need to understand python and golang",
+        "timestamp": 1775408132768,
+        "contentType": "comparison",
+        "category": "Programming Languages",
+        "annotation": "Python and Go (Golang) serve different purposes and excel in distinct areas. Python is renowned for its simplicity and readability, making it ideal for data science, web development, and scripting. Go, on the other hand, is designed for performance and concurrency, often used in building high-performance APIs and infrastructure components. Understanding both languages can provide a versatile skill set, allowing you to choose the right tool for specific tasks, such as using Python for rapid prototyping and Go for scalable backend services ([raythurman.dev](https://www.raythurman.dev/blog/go-for-python-developers-a-practical-hands-on-guide-to-modern-go), 2025).",
+        "confidence": null,
+        "influencedBy": [
+          "7roao4v5"
+        ],
+        "isUnrelated": false
+      },
+      {
+        "id": "u3qwy2l9",
+        "text": "What's the best way to get json from ollama instance",
+        "timestamp": 1775408163374,
+        "contentType": "reference",
+        "category": "AI Integration",
+        "annotation": "To obtain JSON output from an Ollama instance, you can utilize its native JSON mode by setting the `format` parameter to `json`. This ensures that the model strictly adheres to JSON syntax, eliminating conversational text that might otherwise accompany the response. This feature is particularly useful for applications requiring deterministic data structures. For implementation, you can use the Ollama Python library, which allows you to specify this format in your API requests, ensuring consistent and parseable JSON outputs ([coldfusion-example.blogspot.com](https://coldfusion-example.blogspot.com), 2026; [lucianoayres.github.io](https://lucianoayres.github.io), 2024).",
+        "confidence": 1,
+        "influencedBy": [],
+        "isUnrelated": false
+      },
+      {
+        "id": "buxvn93f",
+        "text": "What is best way to integrate scripts and ai",
+        "timestamp": 1775408181598,
+        "contentType": "question",
+        "category": "AI Integration",
+        "annotation": "Integrating scripts with AI effectively often involves using a framework that supports tool calling and orchestration, such as LangChain or Ollama. These frameworks allow you to define tools as functions that the AI can call during its reasoning process, enabling it to interact with external systems or databases. For instance, using Ollama's native JSON mode can ensure structured data output, which is crucial for seamless integration with scripts that require deterministic data formats. This approach is particularly useful in building local AI agents that can perform tasks like web searches or data retrieval autonomously, as discussed in [coldfusion-example.blogspot.com](https://coldfusion-example.blogspot.com/2026/02/how-to-force-json-output-in-ollama.html) and [medium.com](https://medium.com/@strangelyevil/building-a-local-ai-agent-with-ollama-and-tool-calling-00575557ed75).",
+        "confidence": null,
+        "influencedBy": [
+          "u3qwy2l9"
+        ],
+        "isUnrelated": false
+      },
+      {
+        "id": "jlbd6se6",
+        "text": "compare and contrast obsidian silverblue docsify mkdocs",
+        "timestamp": 1775408262335,
+        "contentType": "comparison",
+        "category": "comparison",
+        "annotation": "Obsidian Silverblue, Docsify, and MkDocs serve different purposes and audiences. **Obsidian Silverblue** is a Fedora-based operating system that emphasizes immutability and atomic updates, making it ideal for developers who need a stable and reliable environment. In contrast, **Docsify** and **MkDocs** are static site generators used for documentation. Docsify is JavaScript-based and dynamically loads Markdown files, offering a lightweight and flexible approach without generating static HTML files. MkDocs, written in Python, is known for its simplicity and ease of use, generating static HTML sites that can be hosted anywhere. While Obsidian Silverblue focuses on system stability, Docsify and MkDocs cater to documentation needs with different approaches to content delivery and customization ([unmarkdown.com](https://unmarkdown.com), [staticinsights.s3.amazonaws.com](https://staticinsights.s3.amazonaws.com)).",
+        "confidence": 1,
+        "influencedBy": [],
+        "isUnrelated": false
+      },
+      {
+        "id": "neyac8zx",
+        "text": "Aider looks good, but is it good long term",
+        "timestamp": 1775408496785,
+        "contentType": "opinion",
+        "category": "opinion",
+        "annotation": "While Aider offers immediate utility for AI-assisted coding, its long-term viability depends on *maintainability* and *integration depth*. Tools like GitHub Actions [1] and multistep pipelines [0] might offer more sustainable automation solutions.",
+        "confidence": 1,
+        "influencedBy": [
+          "w4bzrlnq",
+          "7roao4v5"
+        ],
+        "isUnrelated": false
+      },
+      {
+        "id": "wgcecutm",
+        "text": "Map models to use case for macmini m4",
+        "timestamp": 1775408531752,
+        "contentType": "entity",
+        "category": "entity",
+        "annotation": "The Mac mini M4's compact design and powerful performance make it ideal for **AI workflows** and **automation tasks**, especially when paired with tools like GitHub Actions. Its efficiency in handling **multistep pipelines** and **script integration** could streamline complex processes.",
+        "confidence": 1,
+        "influencedBy": [
+          "w4bzrlnq",
+          "7roao4v5",
+          "buxvn93f"
+        ],
+        "isUnrelated": false
+      },
+      {
+        "id": "xa9zkb7g",
+        "text": "Many ideas and POCs, but not cataloged/vcs",
+        "timestamp": 1775412543759,
+        "contentType": "entity",
+        "category": "Knowledge Management",
+        "annotation": "This note highlights a common issue in tech projects: **knowledge fragmentation**. Without proper cataloging or version control, valuable ideas and proofs of concept (POCs) risk being lost or duplicated. Tools like **GitHub** or **Obsidian** could help organize and track these assets effectively.",
+        "confidence": 1,
+        "influencedBy": [
+          "7roao4v5",
+          "jlbd6se6",
+          "neyac8zx"
+        ],
+        "isUnrelated": false
+      }
+    ]
+  }
+}

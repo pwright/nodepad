@@ -3,6 +3,7 @@
 
 import type { RegisteredNodepadPlugin } from "@/lib/plugins"
 import { plugin as pluginModule0 } from "@/plugins/blockscape/plugin"
+import { plugin as pluginModule1 } from "@/plugins/markdown-import/plugin"
 
 export const GENERATED_PLUGINS: RegisteredNodepadPlugin[] = [
   {
@@ -13,5 +14,14 @@ export const GENERATED_PLUGINS: RegisteredNodepadPlugin[] = [
       "enabledByDefault": false
     },
     module: pluginModule0
+  },
+  {
+    manifest: {
+      "id": "markdown-import",
+      "label": "Markdown Import",
+      "description": "Append Markdown files into the current project",
+      "enabledByDefault": false
+    },
+    module: pluginModule1
   }
 ]

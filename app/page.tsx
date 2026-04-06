@@ -20,9 +20,31 @@ import { exportToMarkdown, downloadMarkdown, downloadJson, copyToClipboard } fro
 import { downloadNodepadFile, parseNodepadFile, NodepadParseError } from "@/lib/nodepad-format"
 import { detectContentType } from "@/lib/detect-content-type"
 import { usePlugins } from "@/lib/use-plugins"
+import type { NodepadPluginBlockInput } from "@/lib/plugins"
 
 function generateId() {
   return Math.random().toString(36).substring(2, 10)
+}
+
+function generateUniqueId(reservedIds: Set<string>): string {
+  let id = generateId()
+  while (reservedIds.has(id)) id = generateId()
+  reservedIds.add(id)
+  return id
+}
+
+function sanitizeConfidence(value: number | null | undefined): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || Number.isNaN(value)) return null
+  return Math.min(100, Math.max(0, Math.round(value)))
+}
+
+function deriveSiteName(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "")
+  } catch {
+    return ""
+  }
 }
 
 export interface Project {
@@ -674,6 +696,116 @@ export default function Page() {
     [activeProjectId, pushHistory, updateActiveProject, enrichBlock]
   )
 
+  const appendBlocks = useCallback((incomingBlocks: NodepadPluginBlockInput[]) => {
+    if (incomingBlocks.length === 0) return
+
+    pushHistory(activeProjectId, blocksRef.current)
+    setProjects(current => current.map(project => {
+      if (project.id !== activeProjectId) return project
+
+      const reservedIds = new Set(project.blocks.map(block => block.id))
+      const finalIdByInputId = new Map<string, string>()
+      const normalizedBlocks: TextBlock[] = []
+
+      for (const [index, rawBlock] of incomingBlocks.entries()) {
+        const text = rawBlock.text.trim()
+        if (!text) continue
+
+        const requestedId = typeof rawBlock.id === "string" ? rawBlock.id.trim() : ""
+        let id = requestedId
+        if (!id || reservedIds.has(id)) {
+          id = generateUniqueId(reservedIds)
+        } else {
+          reservedIds.add(id)
+        }
+
+        if (requestedId && !finalIdByInputId.has(requestedId)) {
+          finalIdByInputId.set(requestedId, id)
+        }
+
+        const usedSubTaskIds = new Set<string>()
+        const normalizedSubTasks = Array.isArray(rawBlock.subTasks)
+          ? rawBlock.subTasks.flatMap((subTask, subTaskIndex) => {
+              const subTaskText = subTask.text.trim()
+              if (!subTaskText) return []
+
+              let subTaskId = typeof subTask.id === "string" ? subTask.id.trim() : ""
+              if (!subTaskId || usedSubTaskIds.has(subTaskId)) {
+                subTaskId = `${id}-task-${subTaskIndex + 1}`
+              }
+              while (usedSubTaskIds.has(subTaskId)) {
+                subTaskId = `${id}-task-${subTaskIndex + 1}-${generateId().slice(0, 4)}`
+              }
+              usedSubTaskIds.add(subTaskId)
+
+              return [{
+                id: subTaskId,
+                text: subTaskText,
+                isDone: subTask.isDone === true,
+                timestamp: subTask.timestamp ?? rawBlock.timestamp ?? Date.now() + index,
+              }]
+            })
+          : undefined
+
+        const normalizedSources = Array.isArray(rawBlock.sources)
+          ? rawBlock.sources.flatMap(source => {
+              const url = source.url.trim()
+              if (!url) return []
+              const title = source.title.trim() || url
+              const siteName = source.siteName.trim() || deriveSiteName(url)
+              return [{ url, title, siteName }]
+            })
+          : undefined
+
+        const requestedType = rawBlock.contentType
+        const confidence = sanitizeConfidence(rawBlock.confidence)
+
+        normalizedBlocks.push({
+          id,
+          text,
+          timestamp: rawBlock.timestamp ?? Date.now() + index,
+          contentType: requestedType ?? detectContentType(text),
+          ...(rawBlock.category?.trim() ? { category: rawBlock.category.trim() } : {}),
+          ...(rawBlock.annotation?.trim() ? { annotation: rawBlock.annotation.trim() } : {}),
+          ...(confidence !== undefined ? { confidence } : {}),
+          ...(normalizedSources && normalizedSources.length > 0 ? { sources: normalizedSources } : {}),
+          ...(Array.isArray(rawBlock.influencedBy) ? { influencedBy: rawBlock.influencedBy } : {}),
+          ...(rawBlock.isUnrelated === true ? { isUnrelated: true } : {}),
+          ...(rawBlock.isPinned === true ? { isPinned: true } : {}),
+          ...(normalizedSubTasks && normalizedSubTasks.length > 0 ? { subTasks: normalizedSubTasks } : {}),
+          isEnriching: false,
+          isError: false,
+        })
+      }
+
+      if (normalizedBlocks.length === 0) return project
+
+      const knownIds = new Set([
+        ...project.blocks.map(block => block.id),
+        ...normalizedBlocks.map(block => block.id),
+      ])
+
+      const finalizedBlocks = normalizedBlocks.map(block => {
+        if (!block.influencedBy || block.influencedBy.length === 0) return block
+
+        const influencedBy = Array.from(new Set(
+          block.influencedBy
+            .map(depId => finalIdByInputId.get(depId) ?? depId)
+            .filter(depId => depId !== block.id && knownIds.has(depId)),
+        ))
+
+        return influencedBy.length > 0
+          ? { ...block, influencedBy }
+          : { ...block, influencedBy: undefined }
+      })
+
+      return {
+        ...project,
+        blocks: [...project.blocks, ...finalizedBlocks],
+      }
+    }))
+  }, [activeProjectId, pushHistory])
+
   const deleteBlock = useCallback((id: string) => {
     pushHistory(activeProjectId, blocksRef.current)
     updateActiveProject(p => ({
@@ -872,6 +1004,7 @@ export default function Page() {
           pluginSettings: pluginSettingsByPluginId[action.pluginId] ?? {},
           downloadJson,
           setViewMode,
+          appendBlocks,
         })
       }
     } else if (cmd === "copy-md") {
@@ -887,7 +1020,7 @@ export default function Page() {
     else if (cmd === "thesis" && text) addBlock(text, "thesis")
     
     setIsCommandKOpen(false)
-  }, [enabledPluginActionMap, enabledPluginViewMap, pluginSettingsByPluginId, clearBlocks, addBlock, createProject, getActiveProjectSnapshot])
+  }, [enabledPluginActionMap, enabledPluginViewMap, pluginSettingsByPluginId, clearBlocks, addBlock, createProject, getActiveProjectSnapshot, appendBlocks])
 
   const activePluginView = enabledPluginViewMap.get(viewMode)
   const ActivePluginView = activePluginView?.component
