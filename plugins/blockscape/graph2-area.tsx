@@ -23,9 +23,6 @@ interface BlockscapeNode {
   label: string
   x: number
   y: number
-  baseX: number
-  targetX: number
-  laneIndex: number
 }
 
 interface BlockscapeLane {
@@ -152,10 +149,6 @@ function getBadgeColor(letter: string): string {
   return LETTER_COLOR_PALETTE[letter] ?? LETTER_COLOR_FALLBACK
 }
 
-function average(values: number[]): number {
-  return values.reduce((sum, value) => sum + value, 0) / values.length
-}
-
 function compareLaneOrder(a: BlockscapeNode, b: BlockscapeNode): number {
   const aConfidence = a.block.confidence
   const bConfidence = b.block.confidence
@@ -179,58 +172,6 @@ function compareLaneOrderByType(
 
   if (aTypeIndex !== bTypeIndex) return aTypeIndex - bTypeIndex
   return compareLaneOrder(a, b)
-}
-
-function distributeLane(
-  nodes: BlockscapeNode[],
-  minX: number,
-  maxX: number,
-  gap: number,
-) {
-  if (nodes.length === 0) return
-
-  const sorted = [...nodes].sort((a, b) => {
-    if (a.x === b.x) return a.baseX - b.baseX
-    return a.x - b.x
-  })
-
-  const usable = maxX - minX
-  const required = (sorted.length - 1) * gap
-  if (required > usable) {
-    const step = sorted.length === 1 ? 0 : usable / (sorted.length - 1)
-    sorted.forEach((node, index) => {
-      node.x = minX + step * index
-    })
-    return
-  }
-
-  sorted[0].x = clamp(sorted[0].x, minX, maxX)
-  for (let i = 1; i < sorted.length; i++) {
-    sorted[i].x = Math.max(sorted[i].x, sorted[i - 1].x + gap)
-  }
-
-  const overflow = sorted[sorted.length - 1].x - maxX
-  if (overflow > 0) {
-    sorted.forEach(node => { node.x -= overflow })
-  }
-
-  const underflow = minX - sorted[0].x
-  if (underflow > 0) {
-    sorted.forEach(node => { node.x += underflow })
-  }
-
-  const targetCenter = clamp(
-    average(sorted.map(node => node.targetX)),
-    minX + required / 2,
-    maxX - required / 2,
-  )
-  const currentCenter = (sorted[0].x + sorted[sorted.length - 1].x) / 2
-  const shift = clamp(
-    targetCenter - currentCenter,
-    minX - sorted[0].x,
-    maxX - sorted[sorted.length - 1].x,
-  )
-  sorted.forEach(node => { node.x += shift })
 }
 
 function buildBlockscapeLayout(
@@ -266,9 +207,6 @@ function buildBlockscapeLayout(
     label: truncate(block.text || ""),
     x: 0,
     y: 0,
-    baseX: 0,
-    targetX: 0,
-    laneIndex: 0,
   }))
 
   const nodeById = new Map(nodes.map(node => [node.id, node]))
@@ -307,43 +245,15 @@ function buildBlockscapeLayout(
     lane.centerY = lane.top + LANE_HEIGHT * 0.58
 
     const laneNodes = lane.items
-    const available = maxCenterX - minCenterX
-    const naturalSpan = Math.max(0, (laneNodes.length - 1) * NODE_GAP)
-    const step = laneNodes.length <= 1
-      ? 0
-      : naturalSpan > available
-        ? available / (laneNodes.length - 1)
-        : NODE_GAP
-    const span = step * Math.max(0, laneNodes.length - 1)
-    const startX = clamp(sceneWidth / 2 - span / 2, minCenterX, maxCenterX - span)
+    const available = Math.max(0, maxCenterX - minCenterX)
+    const step = laneNodes.length <= 1 ? 0 : available / (laneNodes.length - 1)
+    const startX = laneNodes.length <= 1 ? sceneWidth / 2 : minCenterX
 
     laneNodes.forEach((node, index) => {
-      const baseX = startX + step * index
-      node.laneIndex = laneIndex
-      node.x = baseX
+      node.x = startX + step * index
       node.y = lane.centerY
-      node.baseX = baseX
-      node.targetX = baseX
     })
   })
-
-  for (let pass = 0; pass < 14; pass++) {
-    nodes.forEach(node => {
-      const relatedX = [...node.deps, ...node.dependents]
-        .map(id => nodeById.get(id)?.x)
-        .filter((value): value is number => typeof value === "number")
-
-      const targetX = relatedX.length > 0 ? average(relatedX) : node.baseX
-      node.targetX = clamp(targetX, minCenterX, maxCenterX)
-
-      const strength = relatedX.length > 0 ? 0.42 : 0.18
-      node.x += (node.targetX - node.x) * strength
-    })
-
-    lanes.forEach(lane => {
-      distributeLane(lane.items, minCenterX, maxCenterX, NODE_GAP)
-    })
-  }
 
   const links: BlockscapeLink[] = []
   nodes.forEach(node => {
